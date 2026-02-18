@@ -43,3 +43,15 @@ Cloud data storage
 Mobile app integration
 Machine learning-based damage prediction
 Automated alert notification system
+
+## Project Images
+
+### Hardware Setup
+![Hardware](image-name.jpg)
+
+### Circuit Diagram
+![Circuit](image-name2.jpg)
+
+### Blynk Output
+![Blynk](image-name3.jpg)
+
