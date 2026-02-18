@@ -1,0 +1,160 @@
+ARDUINO CODE :
+
+#define BLYNK_TEMPLATE_ID "TMPL3yaSp1HaZ"
+#define BLYNK_TEMPLATE_NAME "SHM monitor"
+#define BLYNK_AUTH_TOKEN "RU_rzA5WwNjNAoznKTWruvTGU1uixk5I"
+
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
+#include <DHT.h>
+#include <WiFi.h>
+#include <BlynkSimpleEsp32.h>
+
+char auth[] = BLYNK_AUTH_TOKEN;
+char ssid[] = "OPPO F25 Pro 5G";  
+char pass[] = "t7ewukjjj";
+#define DHTPIN 26
+#define DHTTYPE DHT11
+DHT dht(DHTPIN, DHTTYPE);
+Adafruit_MPU6050 mpu;
+BlynkTimer timer;
+float ax, ay, az, vibration;
+float t, h;
+
+void setup() {
+  Serial.begin(115200);
+  WiFi.begin(ssid, pass);
+  Serial.print("Connecting to WiFi");
+
+  unsigned long startAttemptTime = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 10000) {
+    Serial.print(".");
+    delay(500);
+  }
+
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("\nWiFi Failed! Check SSID/Password or use 2.4GHz network.");
+  } else {
+    Serial.println("\nWiFi Connected!");
+  }  Blynk.config(auth);
+  Blynk.connect();
+  dht.begin();
+  Serial.println("Checking MPU6050...");
+  if (!mpu.begin()) {
+    Serial.println("MPU6050 not detected! Check wiring and SDA/SCL pins.");
+    while (1);
+  } else {
+    Serial.println("MPU6050 detected successfully!");
+  }
+  mpu.setAccelerometerRange(MPU6050_RANGE_4_G);
+  timer.setInterval(500L, sendToBlynk);
+
+
+ML  CODE :
+
+import os
+import argparse
+import numpy as np
+import pandas as pd
+from sklearn.ensemble import IsolationForest, RandomForestClassifier
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import classification_report, confusion_matrix
+import joblib
+
+ def load_csv(path):
+ df = pd.read_csv(path)
+ required = {"ax","ay","az","gx","gy","gz"}
+ if not required.issubset(df.columns):
+ raise ValueError(f"CSV must contain columns: {required}. Found:      {df.columns.tolist()}")
+ if "label" not in df.columns:
+ df["label"] = -1
+ return df
+
+    def generate_synthetic(n_normal=1200, n_anom=100, seed=42):
+    np.random.seed(seed)
+    ax = np.random.normal(0.02, 0.05, size=n_normal)
+    ay = np.random.normal(-0.01, 0.05, size=n_normal)
+    az = np.random.normal(0.00, 0.06, size=n_normal)
+    gx = np.random.normal(0.5, 0.8, size=n_normal)
+    gy = np.random.normal(-0.2, 0.7, size=n_normal)
+    gz = np.random.normal(0.0, 0.9, size=n_normal)
+    normal = np.vstack([ax,ay,az,gx,gy,gz]).T
+    normal_labels = np.zeros(n_normal, dtype=int)
+    ax_a = np.concatenate([np.random.normal(0.8,0.4,int(n_anom*0.6)), np.random.normal(-1.2,0.5,int(n_anom*0.4))])
+    ay_a = np.random.normal(0.6,0.5,size=n_anom)
+    az_a = np.random.normal(1.0,0.6,size=n_anom)
+    gx_a = np.random.normal(20,10,size=n_anom)
+    gy_a = np.random.normal(-15,8,size=n_anom)
+    gz_a = np.random.normal(5,7,size=n_anom)
+    anomalous = np.vstack([ax_a,ay_a,az_a,gx_a,gy_a,gz_a]).T
+    anom_labels = np.ones(n_anom, dtype=int)
+    data = np.vstack([normal,anomalous])
+    labels = np.concatenate([normal_labels, anom_labels])
+    df = pd.DataFrame(data, columns=["ax","ay","az","gx","gy","gz"])
+    df["label"] = labels
+  return d
+  
+MATPLOTLIP CODE
+
+import pandas as pd
+import matplotlib.pyplot as plt	
+df = pd.read_csv("mpu_data.csv")
+plt.figure(figsize=(10,5))
+plt.plot(df.index, df["ax"], label="ax (g)")
+plt.plot(df.index, df["ay"], label="ay (g)")
+plt.plot(df.index, df["az"], label="az (g)")
+plt.title("Acceleration Readings from MPU6050")
+plt.xlabel("Sample Number")
+plt.ylabel("Acceleration (g)")
+plt.legend()
+plt.grid(True)
+plt.show()
+
+plt.figure(figsize=(10,5))
+plt.plot(df.index, df["gx"], label="gx (°/s)")
+plt.plot(df.index, df["gy"], label="gy (°/s)")
+plt.plot(df.index, df["gz"], label="gz (°/s)")
+plt.title("Angular Velocity Readings from MPU6050")
+plt.xlabel("Sample Number")
+plt.ylabel("Angular Velocity (°/s)")
+plt.legend()
+plt.grid(True)
+plt.show()
+
+
+
+
+  Serial.println("System Started...");
+}
+void sendToBlynk() {
+  Blynk.virtualWrite(V1, vibration);
+  Blynk.virtualWrite(V2, ax);
+  Blynk.virtualWrite(V3, ay);
+  Blynk.virtualWrite(V4, az);
+  Blynk.virtualWrite(V5, t);
+  Blynk.virtualWrite(V6, h);
+}
+void loop() {
+  Blynk.run();
+  timer.run();   
+  sensors_event_t a, g, temp;
+  mpu.getEvent(&a, &g, &temp);
+  ax = a.acceleration.x;
+  ay = a.acceleration.y;
+  az = a.acceleration.z;
+  vibration = sqrt(ax * ax + ay * ay + az * az);
+  Serial.print("Ax: "); Serial.print(ax);
+  Serial.print(" Ay: "); Serial.print(ay);
+  Serial.print(" Az: "); Serial.print(az);
+  Serial.print(" | Vibration: "); Serial.println(vibration);
+  h = dht.readHumidity();
+  t = dht.readTemperature();
+  if (isnan(h) || isnan(t)) {
+    Serial.println("Failed to read from DHT sensor!");
+  } else {
+    Serial.print("Temp: "); Serial.print(t);
+    Serial.print("°C  Humidity: "); Serial.println(h);
+  }
+
+  delay(500);  
+}
